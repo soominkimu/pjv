@@ -1,0 +1,16 @@
+{
+  "name": "package",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "package.json file analyzer",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
+  },
+  "author": "soominkimu",
+  "license": "ISC",
+  "dependencies": {
+    "chalk": "^5.0.1"
+  }
+}
