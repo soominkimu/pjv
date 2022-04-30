@@ -2,13 +2,15 @@
   "name": "@spacetimeq/pkviz",
   "version": "0.1.2",
   "description": "package.json file visualization",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" ",
-    "start": "ts-node index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "start:ts": "ts-node src/index.ts",
+    "dev": "ts-node-dev --respawn src/index.ts",
+    "start": "npm run build && node ."
   },
-  "author": "soominkimu",
+  "author": "Soomin K <soominkimu@gmail.com> (https://www.spacetimeq.com/)",
   "license": "MIT",
   "dependencies": {
     "chalk": "^4",
@@ -20,7 +22,10 @@
     "ts-node-dev": "^1.1.8",
     "typescript": "^4.6.4"
   },
+  "keywords": [
+    "pkviz", "package", "visualization", "config"
+  ],
   "bin": {
-    "pkviz": "./index.js"
+    "pkviz": "dist/index.js"
   }
 }

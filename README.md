@@ -4,3 +4,6 @@
 ## Supported Files
 - .env
 - package.json
+
+## Reference
+- [package.json](https://docs.npmjs.com/cli/v7/configuring-npm/package-json)
