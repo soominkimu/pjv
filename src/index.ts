@@ -20,7 +20,8 @@ import dotenv from 'dotenv';
 import chalk from 'chalk';
 // const chalk = require('chalk');
 
-const SEP = chalk.gray(': ');  // separator between key and value
+const SEP  = chalk.gray(': ');  // separator between key and value
+const SEP0 = chalk.gray(':');
 const BULLET = '▫️ ';
 
 type TVMODE = 'all'|'scripts'|'dotenv';
@@ -34,8 +35,16 @@ type JSONValue =
   | Array<JSONValue>;
 interface JSONObject { [x: string]: JSONValue };
 
+const isObject = (o: Object) =>
+  (typeof (o) === 'object') && !Array.isArray(o);
+
 const PACKAGE = './package.json';
 const DOTENV  = './.env';
+const OPTIONS = [
+  {key: 'v', value: "vresion"},
+  {key: 'e', value: ".env only"},
+  {key: 's', value: "scripts (in package.json) only"},
+];
 
 let vmode: TVMODE = 'all';
 const [,, ...args] = process.argv;
@@ -56,12 +65,10 @@ if (args[0]) {
       process.exit(0);
     default:
       console.log(chalk.yellowBright(name), chalk.greenBright('v' + version), description);
-      console.log(
-        chalk.yellow("OPTIONS:"), `\n`,
-        chalk.green('-v, v'), SEP, "version", '\n',
-        chalk.green('-e, e'), SEP, ".env only", '\n',
-        chalk.green('-s, s'), SEP, "scripts (in package.json) only"
-      );
+      console.log(chalk.yellow("OPTIONS:"));
+      OPTIONS.forEach(op => {
+        console.log('  ', chalk.green('-' + op.key) + ', ' + chalk.green(op.key), SEP0, op.value);
+      });
       process.exit(0);
   }
 }
@@ -74,9 +81,9 @@ const SCRIPT_HL = [  // highlighted script
 ];
 
 // pad should be the length of the longest key + 1
-const maxKeyLen = (obj: JSONObject) => {
+const maxKeyLen = <T>(obj: T) => {
   let len=0;
-  Object.keys(obj).forEach((key) => {
+  (Array.isArray(obj) ? obj : Object.keys(obj)).forEach((key) => {
     if (key.length > len)
       len = key.length;
   });
@@ -96,8 +103,6 @@ const logNumbering = (n: number) =>
 // iterate object
 const logKeyValueObj = (obj: JSONObject, key: string) => {
   const o = obj[key] as JSONObject;
-  if ((typeof (o) !== 'object') || Array.isArray(o))
-    return;
   const isScript = key === 'scripts';
   if (vmode === 'scripts' && !isScript)
     return;
@@ -118,10 +123,8 @@ const logKeyValueObj = (obj: JSONObject, key: string) => {
   });
 }
 
-const logKeyValue = (obj: JSONObject, key: string) => {
-  const o = obj[key] as JSONObject;
-  if ((typeof (o) !== 'object') || Array.isArray(o))
-    console.log(BULLET, chalk.cyanBright(key), ':', o);
+const logKeyValue = (obj: JSONObject, key: string, pad: number) => {
+  console.log(BULLET, chalk.cyanBright(`${key.padEnd(pad)}`), SEP0, obj[key]);
 }
 
 try {
@@ -136,7 +139,7 @@ try {
     Object.keys(env).forEach((key, i) => {
       console.log(
         logNumbering(i),
-        key.padEnd(pad), chalk.gray(':'), chalk.greenBright(env[key])
+        key.padEnd(pad) + SEP + chalk.greenBright(env[key])
       );
     });
   });
@@ -158,10 +161,18 @@ if (vmode !== 'dotenv') {
         chalk.black.bgGreen(` ${json.version     || 'no version'} `) +
         chalk.green.bgBlack(` ${json.description || ''} `)
       );
-    // if ((typeof (o) !== 'object') || Array.isArray(o))
-      if (vmode !== 'scripts')
-        Object.keys(json).forEach(key => logKeyValue(json, key));
-      Object.keys(json).forEach(key => logKeyValueObj(json, key));
+      // Partition keys array by its content if it is of pure object type or not
+      const [ob, no] = Object.keys(json).reduce<[string[], string[]]>
+        (([ob, no], k) =>
+          (isObject(json[k])
+          ? [[...ob, k], no]
+          : [ob, [...no, k]]), [[], []]);
+      if (vmode !== 'scripts') {
+        const pad = maxKeyLen(no);
+        no.forEach(key => logKeyValue(json, key, pad));
+      }
+      ob.forEach(key => logKeyValueObj(json, key));
+
     });
   } catch (err) {
     console.error(err);

@@ -25,10 +25,17 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const chalk_1 = __importDefault(require("chalk"));
 // const chalk = require('chalk');
 const SEP = chalk_1.default.gray(': '); // separator between key and value
+const SEP0 = chalk_1.default.gray(':');
 const BULLET = '▫️ ';
 ;
+const isObject = (o) => (typeof (o) === 'object') && !Array.isArray(o);
 const PACKAGE = './package.json';
 const DOTENV = './.env';
+const OPTIONS = [
+    { key: 'v', value: "vresion" },
+    { key: 'e', value: ".env only" },
+    { key: 's', value: "scripts (in package.json) only" },
+];
 let vmode = 'all';
 const [, , ...args] = process.argv;
 if (args[0]) {
@@ -51,7 +58,10 @@ if (args[0]) {
             process.exit(0);
         default:
             console.log(chalk_1.default.yellowBright(name), chalk_1.default.greenBright('v' + version), description);
-            console.log(chalk_1.default.yellow("OPTIONS:"), `\n`, chalk_1.default.green('-v, v'), SEP, "version", '\n', chalk_1.default.green('-e, e'), SEP, ".env only", '\n', chalk_1.default.green('-s, s'), SEP, "scripts (in package.json) only");
+            console.log(chalk_1.default.yellow("OPTIONS:"));
+            OPTIONS.forEach(op => {
+                console.log('  ', chalk_1.default.green('-' + op.key) + ', ' + chalk_1.default.green(op.key), SEP, op.value);
+            });
             process.exit(0);
     }
 }
@@ -64,7 +74,7 @@ const SCRIPT_HL = [
 // pad should be the length of the longest key + 1
 const maxKeyLen = (obj) => {
     let len = 0;
-    Object.keys(obj).forEach((key) => {
+    (Array.isArray(obj) ? obj : Object.keys(obj)).forEach((key) => {
         if (key.length > len)
             len = key.length;
     });
@@ -77,8 +87,6 @@ const logNumbering = (n) => chalk_1.default.gray(`${(n + 1).toString().padStart(
 // iterate object
 const logKeyValueObj = (obj, key) => {
     const o = obj[key];
-    if ((typeof (o) !== 'object') || Array.isArray(o))
-        return;
     const isScript = key === 'scripts';
     if (vmode === 'scripts' && !isScript)
         return;
@@ -95,10 +103,8 @@ const logKeyValueObj = (obj, key) => {
                 : chalk_1.default.yellow(pk) + SEP + chalk_1.default.cyan(o[k]));
     });
 };
-const logKeyValue = (obj, key) => {
-    const o = obj[key];
-    if ((typeof (o) !== 'object') || Array.isArray(o))
-        console.log(BULLET, chalk_1.default.cyanBright(key), ':', o);
+const logKeyValue = (obj, key, pad) => {
+    console.log(BULLET, chalk_1.default.cyanBright(`${key.padEnd(pad)}`), SEP0, obj[key]);
 };
 try {
     fs_1.default.access(DOTENV, fs_1.default.constants.F_OK, (err) => {
@@ -110,7 +116,7 @@ try {
         const env = dotenv_1.default.parse(fs_1.default.readFileSync(DOTENV, 'utf8'));
         const pad = maxKeyLen(env);
         Object.keys(env).forEach((key, i) => {
-            console.log(logNumbering(i), key.padEnd(pad), chalk_1.default.gray(':'), chalk_1.default.greenBright(env[key]));
+            console.log(logNumbering(i), key.padEnd(pad) + SEP + chalk_1.default.greenBright(env[key]));
         });
     });
 }
@@ -129,10 +135,15 @@ if (vmode !== 'dotenv') {
                 chalk_1.default.black.bgWhite(` ${json.name} `) +
                 chalk_1.default.black.bgGreen(` ${json.version || 'no version'} `) +
                 chalk_1.default.green.bgBlack(` ${json.description || ''} `));
-            // if ((typeof (o) !== 'object') || Array.isArray(o))
-            if (vmode !== 'scripts')
-                Object.keys(json).forEach(key => logKeyValue(json, key));
-            Object.keys(json).forEach(key => logKeyValueObj(json, key));
+            // Partition keys array by its content if it is of pure object type or not
+            const [ob, no] = Object.keys(json).reduce(([ob, no], k) => (isObject(json[k])
+                ? [[...ob, k], no]
+                : [ob, [...no, k]]), [[], []]);
+            if (vmode !== 'scripts') {
+                const pad = maxKeyLen(no);
+                no.forEach(key => logKeyValue(json, key, pad));
+            }
+            ob.forEach(key => logKeyValueObj(json, key));
         });
     }
     catch (err) {
