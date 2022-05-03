@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/ur/bin/env node
 /*=============================================================================
  pkviz - package.json visualizer
    - an alternative of cat and bat tools providing formatted view of config files:
@@ -12,6 +12,8 @@
    s - print scripts only in package.json and .env
 
  https://docs.npmjs.com/cli/v7/configuring-npm/package-json
+
+ TODO: When the element of array is an object, formatting is required. [object Object]
 
  (C) 2022 SpacetimeQ INC
 =============================================================================*/
@@ -49,16 +51,16 @@ interface TPackages {
 const packVers: TPackages[] = [];
 
 const isObject = (o: Object) =>
-  (typeof (o) === 'object') && !Array.isArray(o);
+  (typeof (o) === 'object') && !Array.isArray(o);  // array also is an 'object'
 
 const PACKAGE = './package.json';
 const DOTENV  = './.env';
-const OPTIONS = [
-  {key: 'v', value: "vresion"},
-  {key: 'e', value: ".env only"},
-  {key: 's', value: "scripts (in package.json) only"},
-  {key: 'o', value: "check outdated packages"},
-];
+const OPTIONS = new Map([  // key-value pairs with the original insertion order of the keys
+  ['v', "vresion"],
+  ['e', ".env only"],
+  ['s', "scripts (in package.json) only"],
+  ['o', "check outdated packages"],
+]);
 
 let vmode: TVMODE = 'all';
 const [,, ...args] = process.argv;
@@ -83,8 +85,8 @@ if (args[0]) {
       console.log(chalk.yellowBright(name), chalk.greenBright('v' + version), description);
       console.log(chalk.yellowBright('node'), chalk.greenBright(process.version));
       console.log(chalk.yellow("OPTIONS:"));
-      OPTIONS.forEach(op =>
-        console.log('  ', chalk.green('-' + op.key) + ', ' + chalk.green(op.key), SEP0, op.value)
+      OPTIONS.forEach((val, key) =>
+        console.log('  ', chalk.green('-' + key) + ', ' + chalk.green(key), SEP0, val)
       );
       process.exit(0);
   }
@@ -117,6 +119,18 @@ const logField = (field: string) =>
 const logNumbering = (n: number) =>
   chalk.gray(`${(n+1).toString().padStart(3)}`);
 
+const logSubObj = (obj: JSONObject, key: string) => {
+  console.log(BULLET, chalk.cyanBright(key));
+  Object.entries(obj).forEach(([kv, vv], iv) => {
+    if (isObject(vv)) {
+      logSubObj(vv as JSONObject, kv);  // recursively call
+    } else {
+      const pk = ` ${kv.padEnd(maxKeyLen(obj))} `;
+      console.log(logNumbering(iv), chalk.yellow(pk) + SEP + chalk.green(vv));
+    }
+  });
+}
+
 // iterate object
 const logKeyValueObj = (obj: JSONObject, key: string) => {
   const o = obj[key] as JSONObject;
@@ -125,25 +139,16 @@ const logKeyValueObj = (obj: JSONObject, key: string) => {
   if (!isScript && vmode === 'scripts')
     return;
   if (isDep && vmode === 'outdated') {
-    Object.keys(o).forEach((k) => {
-      packVers.push({
-        name: k,
-        dev:  key === 'devDependencies',
-        ver:  o[k] as string
-      });
-    });
+    const dev = key === 'devDependencies';
+    Object.entries(o).forEach(([name, ver]) =>
+      packVers.push({ name, dev, ver: ver as string })
+    );
     return;
   }
   logField(key);
-  Object.keys(o).forEach((k, i) => {
-    const val = o[k];
+  Object.entries(o).forEach(([k, val], i) => {
     if (isObject(val)) {
-      console.log(BULLET, chalk.cyanBright(k));
-      Object.keys(val).forEach((vk, vi) => {
-        const pk = ` ${vk.padEnd(maxKeyLen(val as JSONObject))} `;
-        console.log(logNumbering(vi), chalk.yellow(pk) + SEP +
-          chalk.green((val as JSONObject)[vk]));
-      })
+      logSubObj(val as JSONObject, k);
     } else {
       const pk = ` ${k.padEnd(maxKeyLen(o))} `;  // padded key
       console.log(
@@ -173,10 +178,10 @@ try {
     logFilename('.env');
     const env = dotenv.parse(fs.readFileSync(DOTENV, 'utf8'));
     const pad = maxKeyLen(env);
-    Object.keys(env).forEach((key, i) => {
+    Object.entries(env).forEach(([key, val], i) => {
       console.log(
         logNumbering(i),
-        key.padEnd(pad) + SEP + chalk.greenBright(env[key])
+        key.padEnd(pad) + SEP + chalk.greenBright(val)
       );
     });
   });
@@ -216,51 +221,70 @@ if (vmode !== 'dotenv') {
   }
 }
 
-const logPackVers = (pack: TPackages[], pad: number) => {
+/**
+ * package versions
+ * @param pack - package versions object
+ * @param pad - package name padding
+ * @param d - version padding
+ */
+const logPackVers = (pack: TPackages[], pad: number, d: number) => {
+  if (!pack.length)
+    return;
+  const field = (pack[0].dev ? 'devDependencies' : 'dependencies').padEnd(pad + d + 2);
+  console.log(
+    chalk.black.bgCyan(` ◀︎ ${field.padEnd(pad+d+2)} ▶︎ `),
+    chalk.black.bgWhite((d > 6 ? 'Current' : 'Cur').padStart(d)),
+    chalk.black.bgGreen('Wanted'.padStart(d)),
+    chalk.black.bgMagenta('Latest'.padStart(d))
+  );
   pack.forEach((p, i) => {
     const nk = ` ${p.name.padEnd(pad)} `;
     const od = packVers.find(pk => pk.name === p.name)?.outd;
     console.log(
       logNumbering(i),
       p.name.includes('@')
-      ? chalk.redBright(nk) + SEP + chalk.blue(p.ver.padStart(8))
-      : chalk.yellow(nk)    + SEP + chalk.cyan(p.ver.padStart(8)),
+      ? chalk.redBright(nk) + SEP + chalk.blue(p.ver.padStart(d))
+      : chalk.yellow(nk)    + SEP + chalk.cyan(p.ver.padStart(d)),
       od
-      ? chalk.white((od.current||' ').padStart(8), od.wanted?.padStart(8), od.latest?.padStart(8))
+      ? chalk.white(         (od.current||' ').padStart(d) ) + ' ' +
+        chalk.greenBright(   (od.wanted||' ').padStart(d) )  + ' ' +
+        chalk.magentaBright( (od.latest||' ').padStart(d) )
       : ''
     );
   });
 }
 
+/**
+ * assumption that packVers was already built by reading package.json
+ */
 if (vmode === 'outdated') {
-  exec('npm outdated --json', (error, stdout, _stderr) => {
+  // takes time to run the external command
+  exec('npm outdated --json', (error, stdout) => {  // stderr)
     if (stdout) {
       // console.log(stdout);
+      let pad=0;  // package name padding
+      let d=6;    // minimum padding for version string
+      packVers.forEach(p => {
+        if (p.name.length > pad) pad = p.name.length;
+        if (p.ver.length  > d)   d   = p.ver.length;
+      });
       const json = JSON.parse(stdout);
-      Object.keys(json).forEach(key => {
-        const { current, wanted, latest } = json[key];
+      Object.entries(json).forEach(([key, val]) => {
+        const { current, wanted, latest } = val as TVersions;
         const fo = packVers.find(x => x.name === key);
         if (fo) {
           fo.outd = { current, wanted, latest };
+          if (current?.length > d) d = current.length;
+          if (wanted?.length  > d) d = wanted.length;
+          if (latest?.length  > d) d = latest.length;
         } else {
-          console.log(key, "not found!");
+          console.error(key, "not found!");
         }
       });
-      let pad = 0;
-      packVers.forEach(p => {
-        if (p.name.length > pad)
-          pad = p.name.length;
-      });
-      const [dep, dev] = packVers.reduce<[TPackages[], TPackages[]]>(([dep, dev], k) =>
-        (k.dev ? [dep, [...dev, k]] : [[...dep, k], dev]), [[], []]);
-      if (dep.length) {
-        logField('dependencies');
-        logPackVers(dep, pad);
-      }
-      if (dev.length) {
-        logField('devDependencies');
-        logPackVers(dev, pad);
-      }
+      const [pro, dev] = packVers.reduce<[TPackages[], TPackages[]]>(([pro, dev], k) =>
+        (k.dev ? [pro, [...dev, k]] : [[...pro, k], dev]), [[], []]);
+      logPackVers(pro, pad, d);
+      logPackVers(dev, pad, d);
     }
     if (!error) {
       console.log('✨No outdated modules!');
