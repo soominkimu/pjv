@@ -5,13 +5,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 /*=============================================================================
- pkviz - package.json visualizer
+ viz - visualization tool for developers
    - an alternative of cat and bat tools providing formatted view of config files:
      .env: aligned table
      package.json: especially the "scripts" field
 
  - Installation
- $ yarn global add @spacetimeq/pkviz
+ $ yarn global add viz
 
  - Option arguments
    s - print scripts only in package.json and .env
@@ -19,59 +19,81 @@ Object.defineProperty(exports, "__esModule", { value: true });
  https://docs.npmjs.com/cli/v7/configuring-npm/package-json
 
  TODO: When the element of array is an object, formatting is required. [object Object]
+ - test case: ~/.config/yarn/global/node_modules/yaml/
 
  (C) 2022 SpacetimeQ INC
 =============================================================================*/
 const fs_1 = __importDefault(require("fs"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const chalk_1 = __importDefault(require("chalk")); // for TypeScript use version ^4
+const semver_1 = __importDefault(require("semver"));
 const child_process_1 = require("child_process");
 const SEP = chalk_1.default.gray(': '); // separator between key and value
 const SEP0 = chalk_1.default.gray(':');
-const BULLET = '□';
+const BULLET = '▫️ ';
+const MIN_PAD_VER = 6; // minimum padding for version strings
+const SEMVERSIGN = new Map([
+    ['major', '❌'],
+    ['minor', '✅'],
+    ['patch', '✔️'],
+]);
 ;
 ;
 ;
 const packVers = [];
 const isObject = (o) => (typeof (o) === 'object') && !Array.isArray(o); // array also is an 'object'
-const PACKAGE = './package.json';
-const DOTENV = './.env';
-const OPTIONS = new Map([
-    ['v', "vresion"],
-    ['e', ".env only"],
-    ['s', "scripts (in package.json) only"],
-    ['o', "check outdated packages"],
-]);
-let vmode = 'all';
+let rootPath = './';
+const PACKAGE = 'package.json';
+const DOTENV = '.env';
+const HELP = [
+    ['v', "version", "package version"],
+    ['e', "env", ".env only"],
+    ['s', "scripts", "scripts (in package.json) only"],
+    ['o', "outdated", "check npm outdated packages (takes time)"],
+    ['h', "help", "help"],
+];
 const [, , ...args] = process.argv;
+let vmode = 'all';
 if (args[0]) {
     const arg = args[0];
-    const { name, version, description } = require('../package.json');
+    const { name, version, description } = require('../' + PACKAGE); // own package
     const option = (arg[0] === '-') // allow up to two '-' for the option prefix
         ? (arg[1] === '-')
-            ? arg[2]
-            : arg[1]
-        : arg[0];
-    switch (option.toUpperCase()) {
-        case 'E':
-            vmode = 'dotenv';
-            break;
-        case 'S':
-            vmode = 'scripts';
-            break;
-        case 'O':
-            vmode = 'outdated';
-            break;
-        case 'V':
-            console.log(version);
-            // console.log(process.env.npm_package_version);
-            process.exit(0);
-        default:
-            console.log(chalk_1.default.yellowBright(name), chalk_1.default.greenBright('v' + version), description);
-            console.log(chalk_1.default.yellowBright('node'), chalk_1.default.greenBright(process.version));
-            console.log(chalk_1.default.yellow("OPTIONS:"));
-            OPTIONS.forEach((val, key) => console.log('  ', chalk_1.default.green('-' + key) + ', ' + chalk_1.default.green(key), SEP0, val));
-            process.exit(0);
+            ? arg.substring(2) // long
+            : arg[1] // short
+        : '';
+    if (option) {
+        switch (option.toUpperCase()) {
+            case 'E':
+                vmode = 'dotenv';
+                break;
+            case 'S':
+                vmode = 'scripts';
+                break;
+            case 'O':
+                vmode = 'outdated';
+                break;
+            case 'V':
+                console.log(version);
+                // console.log(process.env.npm_package_version);
+                process.exit(0);
+            default:
+                console.log(chalk_1.default.yellowBright(name), chalk_1.default.greenBright('v' + version), description, '-', chalk_1.default.yellowBright('node'), chalk_1.default.greenBright(process.version));
+                console.log(chalk_1.default.yellow("OPTIONS:"));
+                let pad = 7; // set the longest length in HELP's long option
+                HELP.forEach(arr => {
+                    if (arr[1].length > pad)
+                        pad = arr[1].length;
+                });
+                HELP.forEach(arr => console.log(' ', chalk_1.default.green('-' + arr[0]) + ', ' +
+                    chalk_1.default.green('--' + arr[1].padEnd(pad)), arr[2]));
+                process.exit(0);
+        }
+    }
+    else {
+        rootPath = arg; // TODO: REGEX check required
+        if (rootPath[rootPath.length - 1] !== '/')
+            rootPath += '/';
     }
 }
 // arg: a | A - all
@@ -138,13 +160,13 @@ const logKeyValue = (obj, key, pad) => {
     console.log(BULLET, chalk_1.default.cyanBright(`${key.padEnd(pad)}`), SEP0, obj[key]);
 };
 try {
-    fs_1.default.access(DOTENV, fs_1.default.constants.F_OK, (err) => {
+    fs_1.default.access(rootPath + DOTENV, fs_1.default.constants.F_OK, (err) => {
         if (err) {
             // console.log("No .env");
             return;
         }
         logFilename('.env');
-        const env = dotenv_1.default.parse(fs_1.default.readFileSync(DOTENV, 'utf8'));
+        const env = dotenv_1.default.parse(fs_1.default.readFileSync(rootPath + DOTENV, 'utf8'));
         const pad = maxKeyLen(env);
         Object.entries(env).forEach(([key, val], i) => {
             console.log(logNumbering(i), key.padEnd(pad) + SEP + chalk_1.default.greenBright(val));
@@ -156,13 +178,13 @@ catch (err) {
 }
 if (vmode !== 'dotenv') {
     try {
-        fs_1.default.access(PACKAGE, fs_1.default.constants.F_OK, (err) => {
+        fs_1.default.access(rootPath + PACKAGE, fs_1.default.constants.F_OK, (err) => {
             if (err) { // file not found
-                console.log("⛔️ No", chalk_1.default.red(PACKAGE));
-                return;
+                console.log("⛔️ No", rootPath + PACKAGE);
+                process.exit(1);
             }
-            const json = JSON.parse(fs_1.default.readFileSync(PACKAGE, 'utf8'));
-            console.log(chalk_1.default.white.bgGray(` package.json  `) +
+            const json = JSON.parse(fs_1.default.readFileSync(rootPath + PACKAGE, 'utf8'));
+            console.log(chalk_1.default.white.bgGray(` ${PACKAGE}  `) +
                 chalk_1.default.black.bgWhite(` ${json.name} `) +
                 chalk_1.default.black.bgGreen(` ${json.version || 'no version'} `) +
                 chalk_1.default.green.bgBlack(` ${json.description || ''} `));
@@ -185,24 +207,31 @@ if (vmode !== 'dotenv') {
  * package versions
  * @param pack - package versions object
  * @param pad - package name padding
- * @param d - version padding
+ * @param dp - package version padding
+ * @param dv - outdated versions padding
  */
-const logPackVers = (pack, pad, d) => {
+const logPackVers = (pack, pad, dp, dv) => {
     if (!pack.length)
         return;
-    const field = (pack[0].dev ? 'devDependencies' : 'dependencies').padEnd(pad + d + 2);
-    console.log(chalk_1.default.black.bgCyan(` ◀︎ ${field.padEnd(pad + d + 2)} ▶︎ `), chalk_1.default.black.bgWhite((d > 6 ? 'Current' : 'Cur').padStart(d)), chalk_1.default.black.bgGreen('Wanted'.padStart(d)), chalk_1.default.black.bgMagenta('Latest'.padStart(d)));
+    const field = (pack[0].dev ? 'devDependencies' : 'dependencies').padEnd(pad + dp + 2);
+    console.log(chalk_1.default.black.bgCyan(` ◀︎ ${field.padEnd(pad + dp + 2)} ▶︎ `), chalk_1.default.black.bgWhite((dv > MIN_PAD_VER ? 'Current' : 'Cur').padStart(dv)), chalk_1.default.black.bgGreen('Wanted'.padStart(dv)), chalk_1.default.black.bgMagenta('Latest'.padStart(dv)));
     pack.forEach((p, i) => {
         var _a;
         const nk = ` ${p.name.padEnd(pad)} `;
         const od = (_a = packVers.find(pk => pk.name === p.name)) === null || _a === void 0 ? void 0 : _a.outd;
+        let sn = '';
+        if (od) {
+            const df = semver_1.default.diff(od.current || od.wanted, od.latest) || '';
+            const svsn = df && SEMVERSIGN.get(df);
+            sn = svsn || df;
+        }
         console.log(logNumbering(i), p.name.includes('@')
-            ? chalk_1.default.redBright(nk) + SEP + chalk_1.default.blue(p.ver.padStart(d))
-            : chalk_1.default.yellow(nk) + SEP + chalk_1.default.cyan(p.ver.padStart(d)), od
-            ? chalk_1.default.white((od.current || ' ').padStart(d)) + ' ' +
-                chalk_1.default.greenBright((od.wanted || ' ').padStart(d)) + ' ' +
-                chalk_1.default.magentaBright((od.latest || ' ').padStart(d))
-            : '');
+            ? chalk_1.default.redBright(nk) + SEP + chalk_1.default.blue(p.ver.padStart(dp))
+            : chalk_1.default.yellow(nk) + SEP + chalk_1.default.cyan(p.ver.padStart(dp)), od
+            ? chalk_1.default.white((od.current || '-').padStart(dv)) + ' ' +
+                chalk_1.default.greenBright((od.wanted || ' ').padStart(dv)) + ' ' +
+                chalk_1.default.magentaBright((od.latest || ' ').padStart(dv))
+            : '', sn);
     });
 };
 /**
@@ -214,12 +243,13 @@ if (vmode === 'outdated') {
         if (stdout) {
             // console.log(stdout);
             let pad = 0; // package name padding
-            let d = 6; // minimum padding for version string
+            let dp = MIN_PAD_VER; // minimum padding for version string
+            let dv = MIN_PAD_VER; // outdated version padding
             packVers.forEach(p => {
                 if (p.name.length > pad)
                     pad = p.name.length;
-                if (p.ver.length > d)
-                    d = p.ver.length;
+                if (p.ver.length > dp)
+                    dp = p.ver.length;
             });
             const json = JSON.parse(stdout);
             Object.entries(json).forEach(([key, val]) => {
@@ -227,23 +257,23 @@ if (vmode === 'outdated') {
                 const fo = packVers.find(x => x.name === key);
                 if (fo) {
                     fo.outd = { current, wanted, latest };
-                    if ((current === null || current === void 0 ? void 0 : current.length) > d)
-                        d = current.length;
-                    if ((wanted === null || wanted === void 0 ? void 0 : wanted.length) > d)
-                        d = wanted.length;
-                    if ((latest === null || latest === void 0 ? void 0 : latest.length) > d)
-                        d = latest.length;
+                    if ((current === null || current === void 0 ? void 0 : current.length) > dv)
+                        dv = current.length;
+                    if ((wanted === null || wanted === void 0 ? void 0 : wanted.length) > dv)
+                        dv = wanted.length;
+                    if ((latest === null || latest === void 0 ? void 0 : latest.length) > dv)
+                        dv = latest.length;
                 }
                 else {
                     console.error(key, "not found!");
                 }
             });
             const [pro, dev] = packVers.reduce(([pro, dev], k) => (k.dev ? [pro, [...dev, k]] : [[...pro, k], dev]), [[], []]);
-            logPackVers(pro, pad, d);
-            logPackVers(dev, pad, d);
+            logPackVers(pro, pad, dp, dv);
+            logPackVers(dev, pad, dp, dv);
         }
         if (!error) {
-            console.log('✨No outdated modules!');
+            console.log(packVers.length ? '✨No outdated modules!' : "⚠️  No dependencies.");
         }
     });
 }

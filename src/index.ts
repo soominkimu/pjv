@@ -1,12 +1,12 @@
 #!/ur/bin/env node
 /*=============================================================================
- pkviz - package.json visualizer
+ pjv - package.json visualization tool
    - an alternative of cat and bat tools providing formatted view of config files:
      .env: aligned table
      package.json: especially the "scripts" field
 
  - Installation
- $ yarn global add @spacetimeq/pkviz
+ $ yarn global add viz
 
  - Option arguments
    s - print scripts only in package.json and .env
@@ -14,17 +14,25 @@
  https://docs.npmjs.com/cli/v7/configuring-npm/package-json
 
  TODO: When the element of array is an object, formatting is required. [object Object]
+ - test case: ~/.config/yarn/global/node_modules/yaml/
 
  (C) 2022 SpacetimeQ INC
 =============================================================================*/
 import fs from 'fs';
 import dotenv from 'dotenv';
 import chalk from 'chalk';  // for TypeScript use version ^4
+import semver from 'semver';
 import { exec } from 'child_process';
 
 const SEP  = chalk.gray(': ');  // separator between key and value
 const SEP0 = chalk.gray(':');
 const BULLET = '▫️ ';
+const MIN_PAD_VER = 6;  // minimum padding for version strings
+const SEMVERSIGN = new Map([
+  ['major', '❌'],
+  ['minor', '✅'],
+  ['patch', '✔️'],
+]);
 
 type TVMODE = 'all'|'scripts'|'dotenv'|'outdated';
 
@@ -53,42 +61,57 @@ const packVers: TPackages[] = [];
 const isObject = (o: Object) =>
   (typeof (o) === 'object') && !Array.isArray(o);  // array also is an 'object'
 
-const PACKAGE = './package.json';
-const DOTENV  = './.env';
-const OPTIONS = new Map([  // key-value pairs with the original insertion order of the keys
-  ['v', "vresion"],
-  ['e', ".env only"],
-  ['s', "scripts (in package.json) only"],
-  ['o', "check outdated packages"],
-]);
+let rootPath = './';
+const PACKAGE = 'package.json';
+const DOTENV  = '.env';
+const HELP = [  // key-value pairs with the original insertion order of the keys
+  ['v', "version",  "package version"],
+  ['e', "env",      ".env only"],
+  ['s', "scripts",  "scripts (in package.json) only"],
+  ['o', "outdated", "check npm outdated packages (takes time)"],
+  ['h', "help",     "help"],
+];
 
-let vmode: TVMODE = 'all';
 const [,, ...args] = process.argv;
+let vmode: TVMODE = 'all';
 if (args[0]) {
   const arg = args[0];
-  const { name, version, description } = require('../package.json');
+  const { name, version, description } = require('../' + PACKAGE);  // own package
   const option = (arg[0] === '-')  // allow up to two '-' for the option prefix
     ? (arg[1] === '-')
-      ? arg[2]
-      : arg[1]
-    : arg[0];
+      ? arg.substring(2)  // long
+      : arg[1]  // short
+    : '';
 
-  switch (option.toUpperCase()) {
-    case 'E': vmode = 'dotenv';   break;
-    case 'S': vmode = 'scripts';  break;
-    case 'O': vmode = 'outdated'; break;
-    case 'V':
-      console.log(version);
-      // console.log(process.env.npm_package_version);
-      process.exit(0);
-    default:
-      console.log(chalk.yellowBright(name), chalk.greenBright('v' + version), description);
-      console.log(chalk.yellowBright('node'), chalk.greenBright(process.version));
-      console.log(chalk.yellow("OPTIONS:"));
-      OPTIONS.forEach((val, key) =>
-        console.log('  ', chalk.green('-' + key) + ', ' + chalk.green(key), SEP0, val)
-      );
-      process.exit(0);
+  if (option) {
+    switch (option.toUpperCase()) {
+      case 'E': vmode = 'dotenv';   break;
+      case 'S': vmode = 'scripts';  break;
+      case 'O': vmode = 'outdated'; break;
+      case 'V':
+        console.log(version);
+        // console.log(process.env.npm_package_version);
+        process.exit(0);
+      default:
+        console.log(chalk.yellowBright(name), chalk.greenBright('v' + version), description,
+          '-', chalk.yellowBright('node'), chalk.greenBright(process.version));
+        console.log(chalk.yellow("OPTIONS:"));
+        let pad=7;  // set the longest length in HELP's long option
+        HELP.forEach(arr => {
+          if (arr[1].length > pad)
+            pad = arr[1].length;
+        });
+        HELP.forEach(arr =>
+          console.log(' ',
+            chalk.green('-' + arr[0]) + ', ' +
+            chalk.green('--' + arr[1].padEnd(pad)), arr[2])
+        );
+        process.exit(0);
+    }
+  } else {
+    rootPath = arg;  // TODO: REGEX check required
+    if (rootPath[rootPath.length-1] !== '/')
+      rootPath += '/';
   }
 }
 
@@ -170,13 +193,13 @@ const logKeyValue = (obj: JSONObject, key: string, pad: number) => {
 }
 
 try {
-  fs.access(DOTENV, fs.constants.F_OK, (err) => {
+  fs.access(rootPath + DOTENV, fs.constants.F_OK, (err) => {
     if (err) {
       // console.log("No .env");
       return;
     }
     logFilename('.env');
-    const env = dotenv.parse(fs.readFileSync(DOTENV, 'utf8'));
+    const env = dotenv.parse(fs.readFileSync(rootPath + DOTENV, 'utf8'));
     const pad = maxKeyLen(env);
     Object.entries(env).forEach(([key, val], i) => {
       console.log(
@@ -191,14 +214,14 @@ try {
 
 if (vmode !== 'dotenv') {
   try {
-    fs.access(PACKAGE, fs.constants.F_OK, (err) => {
+    fs.access(rootPath + PACKAGE, fs.constants.F_OK, (err) => {
       if (err) {  // file not found
-        console.log("⛔️ No", chalk.red(PACKAGE));
-        return;
+        console.log("⛔️ No", rootPath + PACKAGE);
+        process.exit(1);
       }
-      const json = JSON.parse(fs.readFileSync(PACKAGE, 'utf8'));
+      const json = JSON.parse(fs.readFileSync(rootPath + PACKAGE, 'utf8'));
       console.log(
-        chalk.white.bgGray(` package.json  `) +
+        chalk.white.bgGray(` ${PACKAGE}  `) +
         chalk.black.bgWhite(` ${json.name} `) +
         chalk.black.bgGreen(` ${json.version     || 'no version'} `) +
         chalk.green.bgBlack(` ${json.description || ''} `)
@@ -225,31 +248,39 @@ if (vmode !== 'dotenv') {
  * package versions
  * @param pack - package versions object
  * @param pad - package name padding
- * @param d - version padding
+ * @param dp - package version padding
+ * @param dv - outdated versions padding
  */
-const logPackVers = (pack: TPackages[], pad: number, d: number) => {
+const logPackVers = (pack: TPackages[], pad: number, dp: number, dv: number) => {
   if (!pack.length)
     return;
-  const field = (pack[0].dev ? 'devDependencies' : 'dependencies').padEnd(pad + d + 2);
+  const field = (pack[0].dev ? 'devDependencies' : 'dependencies').padEnd(pad + dp + 2);
   console.log(
-    chalk.black.bgCyan(` ◀︎ ${field.padEnd(pad+d+2)} ▶︎ `),
-    chalk.black.bgWhite((d > 6 ? 'Current' : 'Cur').padStart(d)),
-    chalk.black.bgGreen('Wanted'.padStart(d)),
-    chalk.black.bgMagenta('Latest'.padStart(d))
+    chalk.black.bgCyan(` ◀︎ ${field.padEnd(pad+dp+2)} ▶︎ `),
+    chalk.black.bgWhite((dv > MIN_PAD_VER ? 'Current' : 'Cur').padStart(dv)),
+    chalk.black.bgGreen('Wanted'.padStart(dv)),
+    chalk.black.bgMagenta('Latest'.padStart(dv))
   );
   pack.forEach((p, i) => {
     const nk = ` ${p.name.padEnd(pad)} `;
     const od = packVers.find(pk => pk.name === p.name)?.outd;
+    let sn = '';
+    if (od) {
+      const df = semver.diff(od.current || od.wanted, od.latest) || '';
+      const svsn = df && SEMVERSIGN.get(df);
+      sn = svsn || df;
+    }
     console.log(
       logNumbering(i),
       p.name.includes('@')
-      ? chalk.redBright(nk) + SEP + chalk.blue(p.ver.padStart(d))
-      : chalk.yellow(nk)    + SEP + chalk.cyan(p.ver.padStart(d)),
+      ? chalk.redBright(nk) + SEP + chalk.blue(p.ver.padStart(dp))
+      : chalk.yellow(nk)    + SEP + chalk.cyan(p.ver.padStart(dp)),
       od
-      ? chalk.white(         (od.current||' ').padStart(d) ) + ' ' +
-        chalk.greenBright(   (od.wanted||' ').padStart(d) )  + ' ' +
-        chalk.magentaBright( (od.latest||' ').padStart(d) )
-      : ''
+      ? chalk.white(         (od.current||'-').padStart(dv) ) + ' ' +
+        chalk.greenBright(   (od.wanted||' ').padStart(dv) )  + ' ' +
+        chalk.magentaBright( (od.latest||' ').padStart(dv) )
+      : '',
+      sn
     );
   });
 }
@@ -263,10 +294,11 @@ if (vmode === 'outdated') {
     if (stdout) {
       // console.log(stdout);
       let pad=0;  // package name padding
-      let d=6;    // minimum padding for version string
+      let dp=MIN_PAD_VER;  // minimum padding for version string
+      let dv=MIN_PAD_VER;  // outdated version padding
       packVers.forEach(p => {
         if (p.name.length > pad) pad = p.name.length;
-        if (p.ver.length  > d)   d   = p.ver.length;
+        if (p.ver.length  > dp)  dp  = p.ver.length;
       });
       const json = JSON.parse(stdout);
       Object.entries(json).forEach(([key, val]) => {
@@ -274,20 +306,20 @@ if (vmode === 'outdated') {
         const fo = packVers.find(x => x.name === key);
         if (fo) {
           fo.outd = { current, wanted, latest };
-          if (current?.length > d) d = current.length;
-          if (wanted?.length  > d) d = wanted.length;
-          if (latest?.length  > d) d = latest.length;
+          if (current?.length > dv) dv = current.length;
+          if (wanted?.length  > dv) dv = wanted.length;
+          if (latest?.length  > dv) dv = latest.length;
         } else {
           console.error(key, "not found!");
         }
       });
       const [pro, dev] = packVers.reduce<[TPackages[], TPackages[]]>(([pro, dev], k) =>
         (k.dev ? [pro, [...dev, k]] : [[...pro, k], dev]), [[], []]);
-      logPackVers(pro, pad, d);
-      logPackVers(dev, pad, d);
+      logPackVers(pro, pad, dp, dv);
+      logPackVers(dev, pad, dp, dv);
     }
     if (!error) {
-      console.log('✨No outdated modules!');
+      console.log(packVers.length ? '✨No outdated modules!' : "⚠️  No dependencies.");
     }
   });
 }
