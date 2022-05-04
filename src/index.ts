@@ -1,4 +1,4 @@
-#!/ur/bin/env node
+#!/usr/bin/env node
 /*=============================================================================
  pjv - package.json visualization tool
    - an alternative of cat and bat tools providing formatted view of config files:
@@ -6,7 +6,7 @@
      package.json: especially the "scripts" field
 
  - Installation
- $ yarn global add viz
+ $ yarn global add pjv
 
  - Option arguments
    s - print scripts only in package.json and .env
