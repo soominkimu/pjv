@@ -1,6 +1,6 @@
 {
   "name": "pjv",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "package.json visualizer",
   "main": "dist/index.js",
   "scripts": {
@@ -23,6 +23,7 @@
   "dependencies": {
     "chalk": "^4.1.2",
     "dotenv": "^16.0.0",
+    "path": "^0.12.7",
     "semver": "^7.3.7"
   },
   "devDependencies": {
