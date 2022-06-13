@@ -35,7 +35,7 @@ const SEMVERSIGN = new Map([  // semverDiff
   ['patch', '✔️ '],
 ]);
 
-type TVMODE = 'all'|'scripts'|'dotenv'|'outdated';
+type TVMODE = 'all'|'scripts'|'dotenv'|'xoutdated';
 
 // JSON object in typescript, Recursive Type Alias
 type JSONValue =
@@ -73,11 +73,11 @@ let rootPath = './';
 const PACKAGE = 'package.json';
 const DOTENV  = '.env';
 const HELP = [  // key-value pairs with the original insertion order of the keys
-  ['v', "version",  "package version"],
-  ['e', "env",      ".env only"],
-  ['s', "scripts",  "scripts (in package.json) only"],
-  ['o', "outdated", "check npm outdated packages (takes time)"],
-  ['h', "help",     "help"],
+  ['v', "version",   "package version"],
+  ['e', "env",       ".env only"],
+  ['s', "scripts",   "scripts (in package.json) only"],
+  ['x', "xoutdated", "skip check npm outdated packages (takes time)"],
+  ['h', "help",      "help"],
 ];
 
 const [,, ...args] = process.argv;
@@ -93,9 +93,9 @@ if (args[0]) {
 
   if (option) {
     switch (option.toLowerCase()[0]) {
-      case 'e': vmode = 'dotenv';   break;
-      case 's': vmode = 'scripts';  break;
-      case 'o': vmode = 'outdated'; break;
+      case 'e': vmode = 'dotenv';    break;
+      case 's': vmode = 'scripts';   break;
+      case 'x': vmode = 'xoutdated'; break;
       case 'v':
         console.log(version);
         // console.log(process.env.npm_package_version);
@@ -170,7 +170,7 @@ const logKeyValueObj = (obj: JSONObject, key: string) => {
   const isDep = key.toLowerCase().includes('dependencies');
   if (!isScript && vmode === 'scripts')
     return;
-  if (isDep && vmode === 'outdated') {
+  if (isDep && vmode !== 'xoutdated') {
     const dev = key === 'devDependencies';
     Object.entries(o).forEach(([name, ver]) =>
       packVers.push({ dep: dirBase, name, dev, ver: ver as string })
@@ -300,7 +300,7 @@ const logPackVers = (pack: TPackages[], pd: number[]) => {
  * assumption that packVers was already built by reading package.json
  * depent name from 'npm outdated' is the current folder name
  */
-if (vmode === 'outdated') {
+if (vmode !== 'xoutdated') {
   // --------------------------------------------------------------------------------
   // takes time to run the external command
   exec('npm outdated --json', (error, stdout) => {  // stderr)
