@@ -76,7 +76,7 @@ const HELP = [  // key-value pairs with the original insertion order of the keys
   ['v', "version",   "package version"],
   ['e', "env",       ".env only"],
   ['s', "scripts",   "scripts (in package.json) only"],
-  ['x', "xoutdated", "skip check npm outdated packages (takes time)"],
+  ['x', "xcheck",    "skip checking npm outdated packages that takes time"],
   ['h', "help",      "help"],
 ];
 
@@ -300,7 +300,11 @@ const logPackVers = (pack: TPackages[], pd: number[]) => {
  * assumption that packVers was already built by reading package.json
  * depent name from 'npm outdated' is the current folder name
  */
-if (vmode !== 'xoutdated') {
+if (
+  vmode !== 'xoutdated' &&
+  vmode !== 'dotenv' &&
+  vmode !== 'scripts'
+) {
   // --------------------------------------------------------------------------------
   // takes time to run the external command
   exec('npm outdated --json', (error, stdout) => {  // stderr)
