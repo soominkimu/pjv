@@ -235,7 +235,7 @@ if (vmode !== 'dotenv') {
       const json = JSON.parse(fs.readFileSync(rootPath + PACKAGE, 'utf8'));
       packageName = json.name;
       console.log(
-        chalk.white.bgGray(` ${PACKAGE}  `) +
+        chalk.white.bgGray( ` ${PACKAGE}  `) +
         chalk.black.bgWhite(` ${packageName} `) +
         chalk.black.bgGreen(` ${json.version     || 'no version'} `) +
         chalk.green.bgBlack(` ${json.description || ''} `)
@@ -269,7 +269,7 @@ const logPackVers = (pack: TPackages[], pd: number[]) => {
   console.log(
     chalk.black.bgCyan(` ◀︎ ${field.padEnd(pd[0]+pd[1]+2)} ▶︎ `),
     chalk.black.bgWhite((pd[2] > MIN_PAD_VER ? 'Current' : 'Cur').padStart(pd[2])),
-    chalk.black.bgGreen('Wanted'.padStart(pd[3])),
+    chalk.black.bgGreen(  'Wanted'.padStart(pd[3])),
     chalk.black.bgMagenta('Latest'.padStart(pd[4]))
   );
   pack.forEach((p, i) => {
@@ -285,7 +285,9 @@ const logPackVers = (pack: TPackages[], pd: number[]) => {
     console.log(
       logNumbering(i),
       p.name.includes('@')
-      ? chalk.redBright(nk) + SEP + chalk.blue(p.ver.padStart(pd[1]))
+      ? (p.name.includes('@types/')
+          ? chalk.blueBright.italic(nk)
+          : chalk.redBright(nk) ) + SEP + chalk.blue(p.ver.padStart(pd[1]))
       : chalk.yellow(nk)    + SEP + chalk.cyan(p.ver.padStart(pd[1])),
       p.outd
       ? chalk.white(         (p.outd.current||'-').padStart(pd[2]) ) + ' ' +
@@ -328,10 +330,10 @@ if (
           }
         } else {  // dependent is another workspace
           packVers.push({
-            dep: val.dependent,
+            dep:  val.dependent,
             name: key,
-            dev: false,
-            ver: '',
+            dev:  false,
+            ver:  '',
             outd: { current, wanted, latest }
           });
         }

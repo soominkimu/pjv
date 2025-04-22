@@ -1,6 +1,19 @@
+# dependencies
 /node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+pnpm-lock.yaml
+
 /dist
 
 .DS_Store
 *.log
 yarn.lock
+
+# asdf
+.tool-versions
